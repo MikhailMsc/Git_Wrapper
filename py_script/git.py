@@ -2,10 +2,43 @@ import os
 import subprocess
 import platform
 from functools import reduce
+import re
 
 system = platform.system()
 os_sep = os.sep
 encoding = 'utf-8' if system != 'Windows' else 'cp1251'
+
+remote_user = ''
+remote_pwd = ''
+
+domen = 'github.com'
+origin_url = 'https://{user}:{pwd}@github.com/{user}/{rep}'
+github_page = re.compile('https://(?P<user>[a-zA-Z0-9_]+):(?P<pwd>[a-zA-Z0-9_]+)@github.com/(?P<user2>[a-zA-Z0-9_]+)/(?P<rep>[a-zA-Z0-9_]+).git')
+
+def make_remote_config(self, user='',pwd='',rep='',url=''):
+	if 'user' not in self.__dict__ or user:
+		self.user = user
+	if 'pwd' not in self.__dict__ or pwd:
+		self.pwd = pwd
+	if 'rep' not in self.__dict__ or rep:
+		self.rep = rep
+	if 'origin_url' not in self.__dict__ or url:
+		self.origin_url = url		
+
+
+		if tmp_url:
+			if (not github_pag.match(tmp_url)) and self.user and self.pwd:
+				self.origin_url = origin_url.format(user=self.user, pwd=self.pwd,rep=tmp_url.split('/')[-1])
+			elif github_pag.match(tmp_url):
+				self.origin_url = tmp_url
+				self.user = github_pag.match(tmp_url).group('user')
+				self.pwd = github_pag.match(tmp_url).group('pwd')
+			else:
+				self.origin_url = tmp_url
+		else: self.origin_url = None
+
+
+
 
 def run_cmd(cmd, pth=None):
 	output = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, cwd=pth).communicate()
@@ -24,6 +57,9 @@ def congig(uname=None, umail=None, endstr=False):
 		output = run_cmd('git config --list')
 		print(output)
 
+def set_remote(user=None, pwd=None):
+	if user: repo_user = user
+	if pwd: repo_pwd = pwd
 
 class Git_Repo:
 	def __init__(self, pth, clone=False, params=''):
@@ -39,6 +75,36 @@ class Git_Repo:
 					comand = ' '.join([x for x in ['git init', params] if x])
 					output = self.run_cmd(comand)
 					print(output)
+				else: return None
+
+		tmp_url = self.get_remote_url()
+		if tmp_url:
+			if (not github_page.match(tmp_url)) and domen not in tmp_url:
+				self.origin_url = tmp_url
+			elif (not github_page.match(tmp_url)) and domen in tmp_url:
+				self.make_remote_config(user=remote_user,pwd=remote_pwd,rep=tmp_url.split('/')[-1])
+			elif github_page.match(tmp_url):
+				self.origin_url = tmp_url
+				self.user = github_page.match(tmp_url).group('user')
+				self.pwd = github_page.match(tmp_url).group('pwd')
+				self.rep = github_page.match(tmp_url).group('rep')
+		else: self.make_remote_config(user=remote_user,pwd=remote_pwd)
+
+	def make_remote_config(self, user='',pwd='',rep='',url=''):
+		if 'user' not in self.__dict__ or user:
+			self.user = user
+		if 'pwd' not in self.__dict__ or pwd:
+			self.pwd = pwd
+		if 'rep' not in self.__dict__ or rep:
+			if rep and rep[-4:] != '.git': rep += '.git'
+			self.rep = rep
+		
+		if url: self.origin_url = url
+		elif 'origin_url' not in self.__dict__: self.origin_url = None
+
+		if (user or pwd or rep) and (self.user and self.pwd and self.rep):
+			self.origin_url = origin_url.format(user=user or self.user, pwd=pwd or self.pwd, rep=rep or self.rep)
+
 
 	def concat_path(self,pth):
 		if os_sep == '/' and '\\' in pth:
@@ -195,7 +261,7 @@ class Git_Repo:
 		output = self.run_cmd('git remote')
 		print(output)
 
-	def info_remote_rep(self, name='origin'):
+	def get_remote_info(self, name='origin'):
 		comand = ' '.join([x for x in ['git remote show',name]])
 		output = self.run_cmd(comand)
 		print(output)
@@ -215,7 +281,7 @@ class Git_Repo:
 		output = self.run_cmd(comand)
 		print(output)
 
-	def push(self, name, branch, params=''):
+	def push(self, branch, name='origin', params=''):
 		'''
 		git push origin d80e5f1:old_master # удалённо будет создана или обновлена ветка old_master. будет указывать на коммит d80e5f1
 		git push origin my_local_feature:new_feature/with_nice_name   # создать или обновить ветку new_feature/with_nice_name моей my_local_feature
@@ -224,3 +290,14 @@ class Git_Repo:
 		comand = ' '.join([x for x in ['git push', name, branch, params]])
 		output = self.run_cmd(comand)
 		print(output)
+
+	def get_remote_url(self):
+		output = self.run_cmd('git config --get remote.origin.url').strip()
+		return output
+
+	def set_remote_url(self, params=''):
+		if self.origin_url:
+			comand = ' '.join([x for x in ['git remote set-url origin', self.origin_url, params]])
+			output = self.run_cmd(comand)
+			if output: print(output)
+		
